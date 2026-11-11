@@ -1,4 +1,4 @@
-name: Cloudflare Private Speedtest Runner
+name: Cloudflare Public Speedtest Runner
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cf-speedtest-private
+  group: cf-speedtest-public
   cancel-in-progress: false
 
 env:
@@ -16,7 +16,7 @@ env:
 
 jobs:
   speedtest-and-dispatch:
-    name: Private Runner & Dispatch
+    name: Public Runner & Dispatch
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
