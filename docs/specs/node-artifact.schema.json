@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://overnodes.local/schemas/node-artifact.schema.json",
+  "title": "OverNodes Node Artifact v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "run_id",
+    "generated_at",
+    "producer"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "artifact_type": {
+      "enum": [
+        "node-list",
+        "chain-list",
+        "subscription",
+        "report"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{8,64}$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "workflow": {
+          "type": "string"
+        },
+        "runner": {
+          "type": "string"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "direct": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "chain": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "published": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "demoted": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/NodeRecord"
+      }
+    }
+  },
+  "$defs": {
+    "NodeRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "kind",
+        "entry",
+        "tags",
+        "provenance"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "kind": {
+          "enum": [
+            "direct",
+            "chain",
+            "domain"
+          ]
+        },
+        "entry": {
+          "$ref": "#/$defs/Entry"
+        },
+        "sni": {
+          "type": "string"
+        },
+        "http_host": {
+          "type": "string"
+        },
+        "tls": {
+          "type": "boolean"
+        },
+        "exit": {
+          "$ref": "#/$defs/Exit"
+        },
+        "metrics": {
+          "$ref": "#/$defs/Metrics"
+        },
+        "purity": {
+          "$ref": "#/$defs/Purity"
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        }
+      }
+    },
+    "Entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "port",
+        "address_type",
+        "protocol"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "address_type": {
+          "enum": [
+            "ip",
+            "domain"
+          ]
+        },
+        "protocol": {
+          "enum": [
+            "cf-anycast",
+            "domain-fronting"
+          ]
+        }
+      }
+    },
+    "Exit": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "port",
+            "protocol"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "protocol": {
+              "const": "socks5"
+            },
+            "auth_ref": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "Metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "latency_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speed_mbps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "measured_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "Purity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "asn_ok": {
+          "type": "boolean"
+        },
+        "tls_ok": {
+          "type": "boolean"
+        },
+        "probe_ok": {
+          "type": "boolean"
+        },
+        "asn": {
+          "type": "string"
+        },
+        "dnsbl_hits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dnsbl_checked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fraud_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "proxy": {
+          "type": "boolean"
+        },
+        "vpn": {
+          "type": "boolean"
+        },
+        "tor": {
+          "type": "boolean"
+        },
+        "ippure_risk": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "computed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "Tags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "country",
+        "purpose"
+      ],
+      "properties": {
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "label": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "purpose": {
+          "enum": [
+            "actions",
+            "local",
+            "download",
+            "chain",
+            "domain",
+            "legacy"
+          ]
+        }
+      }
+    },
+    "Provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "producer"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "source_file": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "artifact_type": {
+            "enum": [
+              "node-list",
+              "chain-list"
+            ]
+          }
+        },
+        "required": [
+          "artifact_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "records"
+        ]
+      }
+    }
+  ]
+}

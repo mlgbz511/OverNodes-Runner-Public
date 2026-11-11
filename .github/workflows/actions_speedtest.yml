@@ -1,0 +1,177 @@
+name: Cloudflare Private Speedtest Runner
+
+on:
+  workflow_dispatch:
+  # schedule 保持停用：定时任务由公开 Runner 仓库执行，避免消耗私有库 Actions 分钟数
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cf-speedtest-private
+  cancel-in-progress: false
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  speedtest-and-dispatch:
+    name: Private Runner & Dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出私有测速仓库代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+
+      - name: 检出公开分发仓库 (不持久化凭据)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: mlgbz511/OverNodes
+          token: ${{ secrets.DISPATCH_PAT }}
+          path: public_repo
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: 初始化 Python 环境
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: 安装运行时依赖 (固定版本 + 重试)
+        run: |
+          python -m pip install --upgrade pip --retries 5 --timeout 30
+          pip install --retries 5 --timeout 30 "aiohttp==3.14.5"
+
+      - name: 1. 执行入站优选测速探针 (收敛探测密度)
+        env:
+          PROBE_DOMAIN: ${{ secrets.PROBE_DOMAIN }}
+        run: |
+          if [ -z "$PROBE_DOMAIN" ]; then
+            echo "::error::PROBE_DOMAIN Secret is not set!"
+            exit 1
+          fi
+          python src/cf_overscan.py \
+            --existing-file public_repo/overNode_actions.txt \
+            --output overNode_actions.txt \
+            --backup-file overNode_actions_backup.txt \
+            --download-output overNode_download.txt \
+            --node-tag Actions \
+            --regions SG,US \
+            --domain "$PROBE_DOMAIN" \
+            --ports 443,2087,8443 \
+            --target-count 6 \
+            --min-speed 0.5 \
+            --workers 100 \
+            --ping-times 1 \
+            --max-scan-ips 1200 \
+            --iata-probe-limit 1200 \
+            --max-candidates 8 \
+            --time-budget 720 \
+            --purity \
+            --skip-check \
+            --force \
+            --artifact-dir artifacts \
+            --no-push
+
+      - name: 1b. 校验统一节点产物 Schema (fail-closed)
+        run: |
+          shopt -s nullglob
+          runs=(artifacts/*/)
+          if [ ${#runs[@]} -eq 0 ]; then
+            echo "::error::未找到 artifacts/*/ 产物目录，拒绝继续发布"
+            exit 1
+          fi
+          files=()
+          for d in "${runs[@]}"; do
+            for f in run.json nodes.jsonl; do
+              if [ ! -f "$d/$f" ]; then
+                echo "::error::$d 缺少 $f，拒绝继续发布"
+                exit 1
+              fi
+              files+=("$d$f")
+            done
+          done
+          python tools/validate_node_artifact.py "${files[@]}"
+
+      - name: 1c. 扫描 artifact 隐私与秘密边界 (fail-closed)
+        run: |
+          python tools/ci_artifact_check.py artifacts
+
+      - name: 1d. 上传统一节点产物 (仅 run.json/nodes.jsonl，7 天)
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-artifacts-${{ github.run_id }}
+          # 显式白名单：private/ 与其它文件永不进入 artifact
+          path: |
+            artifacts/*/run.json
+            artifacts/*/nodes.jsonl
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: 2. 跨仓库推送到公开分发仓库 (token 不落盘 + 重试)
+        env:
+          DISPATCH_PAT: ${{ secrets.DISPATCH_PAT }}
+        run: |
+          set -u
+          has_updates=0
+          if [ -f overNode_actions.txt ]; then
+            cp overNode_actions.txt public_repo/overNode_actions.txt
+            [ -f overNode_actions_backup.txt ] && cp overNode_actions_backup.txt public_repo/overNode_actions_backup.txt
+            has_updates=1
+          fi
+          if [ -f overNode_download.txt ]; then
+            cp overNode_download.txt public_repo/overNode_download.txt
+            has_updates=1
+          fi
+          if [ -f ACL4SSR_Custom_Advanced.ini ]; then
+            cp ACL4SSR_Custom_Advanced.ini public_repo/ACL4SSR_Custom_Advanced.ini
+            has_updates=1
+          fi
+          if [ "$has_updates" -eq 0 ]; then
+            echo "[-] 测速未生成结果文件！"
+            exit 1
+          fi
+
+          cd public_repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://github.com/mlgbz511/OverNodes.git
+          git add overNode_actions.txt ACL4SSR_Custom_Advanced.ini
+          [ -f overNode_actions_backup.txt ] && git add overNode_actions_backup.txt
+          [ -f overNode_download.txt ] && git add overNode_download.txt
+
+          if git diff --staged --quiet; then
+            echo "[+] 优选节点与下载专线内容无变动，无需推送。"
+            exit 0
+          fi
+
+          git commit -m "Auto-update pure Cloudflare nodes & download nodes: $(date -u +'%Y-%m-%d %H:%M:%S UTC') [skip ci]"
+          AUTH=$(printf 'x-access-token:%s' "$DISPATCH_PAT" | base64 | tr -d '\n')
+          for i in 1 2 3; do
+            if git -c http.extraheader="AUTHORIZATION: basic ${AUTH}" push origin main; then
+              echo "[+] 🚀 跨仓库推送成功 (第 ${i} 次尝试)。"
+              exit 0
+            fi
+            echo "[!] push 失败，第 ${i} 次重试前先 rebase..."
+            git -c http.extraheader="AUTHORIZATION: basic ${AUTH}" pull --rebase origin main || true
+            sleep $((i * 5))
+          done
+          echo "::error::连续 3 次推送失败"
+          exit 1
+
+      - name: 3. 自动同步 Top 优选 IP 到 Cloudflare 域名解析 (DDNS, 尽力而为)
+        if: always()
+        continue-on-error: true
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          CF_DNS_NAME: ${{ secrets.CF_DNS_NAME }}
+        run: |
+          if [ -f overNode_actions.txt ] && [ -f tools/update_cf_dns.py ]; then
+            python tools/update_cf_dns.py --input overNode_actions.txt
+          else
+            echo "[DDNS] 跳过：输入文件或脚本缺失（建议将该脚本纳入版本库）"
+          fi

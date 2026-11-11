@@ -1,0 +1,6 @@
+artifacts/
+overNode_*.txt
+socks5*.txt
+__pycache__/
+*.pyc
+.tmp/
