@@ -61,7 +61,7 @@ jobs:
             --node-tag Actions \
             --regions SG,US \
             --domain "$PROBE_DOMAIN" \
-            --ports 443,2087,8443 \
+            --ports 443 \
             --target-count 6 \
             --min-speed 0.5 \
             --workers 100 \
