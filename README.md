@@ -1,6 +1,6 @@
 # OverNodes-Runner-Public
 
-公开 GitHub Actions 测速执行端，生成并推送节点到 `mlgbz511/OverNodes`。
+公开 GitHub Actions 测速执行端，生成并推送节点到私有订阅仓 `mlgbz511/OverNodes`。
 
 ## 必需 Secrets
 
@@ -14,7 +14,7 @@
 
 - 手动：Actions → `Cloudflare Private Speedtest Runner` → Run workflow
 - 定时：由 `worker-cron-trigger` 调度（目标 `mlgbz511/OverNodes-Runner-Public`）
-- 产物：`artifacts/<run_id>/` 作为 Actions artifact 保存 7 天，不进入公开仓
+- 产物：`artifacts/<run_id>/` 仅本地校验，不上传 Actions artifact，避免公开仓泄露节点
 
 ## 安全边界
 

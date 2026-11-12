@@ -25,7 +25,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 检出公开分发仓库 (不持久化凭据)
+      - name: 检出私有订阅仓库 (不持久化凭据)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: mlgbz511/OverNodes
@@ -100,18 +100,7 @@ jobs:
         run: |
           python tools/ci_artifact_check.py artifacts
 
-      - name: 1d. 上传统一节点产物 (仅 run.json/nodes.jsonl，7 天)
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-artifacts-${{ github.run_id }}
-          # 显式白名单：private/ 与其它文件永不进入 artifact
-          path: |
-            artifacts/*/run.json
-            artifacts/*/nodes.jsonl
-          retention-days: 7
-          if-no-files-found: error
-
-      - name: 2. 跨仓库推送到公开分发仓库 (token 不落盘 + 重试)
+      - name: 2. 跨仓库推送到私有订阅仓库 (token 不落盘 + 重试)
         env:
           DISPATCH_PAT: ${{ secrets.DISPATCH_PAT }}
         run: |
